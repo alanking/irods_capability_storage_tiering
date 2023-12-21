@@ -207,11 +207,16 @@ def delay_assert_icommand(session, *args, **kwargs):
         else:
             done = True
 
-def invoke_storage_tiering_rule():
+def invoke_storage_tiering_rule(user_session=None):
     rep_instance = 'irods_rule_engine_plugin-unified_storage_tiering-instance'
     rule_file_path = '/var/lib/irods/example_unified_tiering_invocation.r'
-    with session.make_session_for_existing_admin() as admin_session:
-        admin_session.assert_icommand(['irule', '-r', rep_instance, '-F', rule_file_path])
+
+    if user_session is None:
+        with session.make_session_for_existing_admin() as admin_session:
+            admin_session.assert_icommand(['irule', '-r', rep_instance, '-F', rule_file_path])
+
+    else:
+        user_session.assert_icommand(['irule', '-r', rep_instance, '-F', rule_file_path])
 
 def get_tracked_replica(session, logical_path, group_attribute_name=None):
     coll_name = os.path.dirname(logical_path)
@@ -1617,8 +1622,6 @@ class test_incorrect_custom_violating_queries(unittest.TestCase):
             IrodsController().restart(test_mode=True)
 
             with session.make_session_for_existing_admin() as admin_session:
-                zone_name = IrodsConfig().client_environment['irods_zone_name']
-
                 filename = 'test_incorrect_violating_query.txt'
                 logical_path = '/'.join([self.user.session_collection, filename])
                 resource = 'ufs0'
@@ -1675,3 +1678,140 @@ class test_incorrect_custom_violating_queries(unittest.TestCase):
         # The ordering of DATA_NAME and COLL_NAME is flipped.
         columns = 'COLL_NAME, DATA_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM'
         self.do_incorrect_violating_query_test(columns)
+
+
+class test_data_migration_with_various_permissions_levels(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        self.user = session.mkuser_and_return_session('rodsuser', 'alice', 'apass', lib.get_hostname())
+        self.other_user = session.mkuser_and_return_session('rodsuser', 'smeagol', 'spass', lib.get_hostname())
+        self.public_collection = '/'.join(['/' + self.user.zone_name, 'home', 'public'])
+
+        with session.make_session_for_existing_admin() as admin_session:
+            admin_session.assert_icommand(['iqdel', '-a'])
+
+            lib.create_ufs_resource(admin_session, 'ufs0', test.settings.HOSTNAME_2)
+            admin_session.assert_icommand(
+                ['imeta', 'add', '-R', 'ufs0', 'irods::storage_tiering::group', 'example_group', '0'])
+            admin_session.assert_icommand(['imeta', 'add', '-R', 'ufs0', 'irods::storage_tiering::time', '5'])
+            admin_session.assert_icommand(
+                ['imeta', 'ls', '-R', 'ufs0'], 'STDOUT_MULTILINE', ['value: 5', 'value: example_group'])
+
+            lib.create_ufs_resource(admin_session, 'ufs1', test.settings.HOSTNAME_3)
+            admin_session.assert_icommand(
+                ['imeta', 'add', '-R', 'ufs1', 'irods::storage_tiering::group', 'example_group', '1'])
+            admin_session.assert_icommand(['imeta', 'ls', '-R', 'ufs1'], 'STDOUT', 'value: example_group')
+
+    @classmethod
+    def tearDownClass(self):
+        self.user.__exit__()
+        self.other_user.__exit__()
+
+        with session.make_session_for_existing_admin() as admin_session:
+            admin_session.assert_icommand(['iadmin', 'rmuser', self.user.username])
+            admin_session.assert_icommand(['iadmin', 'rmuser', self.other_user.username])
+
+            admin_session.assert_icommand(['iadmin', 'rmresc', 'ufs0'])
+            admin_session.assert_icommand(['iadmin', 'rmresc', 'ufs1'])
+            admin_session.assert_icommand(['iadmin', 'rum'])
+
+    def do_tier_out_for_user_with_insufficient_permissions(self, permission):
+        with storage_tiering_configured_with_log():
+            IrodsController().restart(test_mode=True)
+
+            with session.make_session_for_existing_admin() as admin_session:
+                filename = 'test_data_migration_for_various_permissions_levels.txt'
+                logical_path = '/'.join([self.public_collection, filename])
+                resource = 'ufs0'
+                other_resource = 'ufs1'
+
+                try:
+                    lib.create_local_testfile(filename)
+                    self.user.assert_icommand(['iput', '-R', resource, filename, logical_path])
+                    delay_assert_icommand(self.user, f'ils -l {logical_path}', 'STDOUT', resource)
+                    self.user.assert_icommand(['ichmod', permission, self.other_user.username, logical_path])
+
+                    # Ensure that the other user has the right permissions.
+                    if permission == 'null':
+                        # If the other user has "null" permissions, ensure that the other user's username does
+                        # not appear when listing permissions on the object.
+                        self.user.assert_icommand_fail(
+                            ['ils', '-Al', logical_path], 'STDOUT',
+                            '{}#{}'.format(self.other_user.username, self.other_user.zone_name))
+
+                    else:
+                        self.user.assert_icommand(
+                            ['ils', '-Al', logical_path], 'STDOUT',
+                            '{}#{}:{}'.format(self.other_user.username, self.other_user.zone_name, permission))
+
+                    # User with no permissions invokes storage tiering rule. Should result in no migrations.
+                    sleep(6)
+                    #invoke_storage_tiering_rule(self.other_user)
+                    invoke_storage_tiering_rule()
+                    admin_session.assert_icommand(['iqstat', '-a'], 'STDOUT', 'irods_policy_storage_tiering')
+                    lib.delayAssert(lambda:
+                        'No delayed rules pending' in admin_session.run_icommand(['iqstat', '-a'])[0].strip())
+
+                    # The data object owner should do this because the other user may have insufficient permissions.
+                    self.user.assert_icommand_fail(['ils', '-l', logical_path], 'STDOUT', other_resource)
+                    self.user.assert_icommand(['ils', '-l', logical_path], 'STDOUT', resource)
+
+                finally:
+                    self.user.assert_icommand(['irm', '-f', logical_path])
+
+    def do_tier_out_for_user_with_sufficient_permissions(self, permission):
+        with storage_tiering_configured_with_log():
+            IrodsController().restart(test_mode=True)
+
+            with session.make_session_for_existing_admin() as admin_session:
+                filename = 'test_data_migration_for_various_permissions_levels.txt'
+                logical_path = '/'.join([self.public_collection, filename])
+                resource = 'ufs0'
+                other_resource = 'ufs1'
+
+                try:
+                    lib.create_local_testfile(filename)
+                    self.user.assert_icommand(['iput', '-R', resource, filename, logical_path])
+                    delay_assert_icommand(self.user, f'ils -l {logical_path}', 'STDOUT', resource)
+                    self.user.assert_icommand(['ichmod', permission, self.other_user.username, logical_path])
+
+                    # Ensure that the other user can at least see the data object and has the right permissions.
+                    self.other_user.assert_icommand(
+                        ['ils', '-Al', logical_path], 'STDOUT',
+                        '{}#{}:{}'.format(self.other_user.username, self.other_user.zone_name, permission))
+
+                    # Non-owner user invokes storage tiering rule. Should result in tier-out.
+                    sleep(6)
+                    invoke_storage_tiering_rule(self.other_user)
+                    admin_session.assert_icommand(['iqstat', '-a'], 'STDOUT', 'irods_policy_storage_tiering')
+                    lib.delayAssert(lambda:
+                        'No delayed rules pending' in admin_session.run_icommand(['iqstat', '-a'])[0].strip())
+
+                    # The owner of the data object should run these because the other user has no permissions.
+                    self.other_user.assert_icommand(['ils', '-l', logical_path], 'STDOUT', other_resource)
+                    self.other_user.assert_icommand_fail(['ils', '-l', logical_path], 'STDOUT', resource)
+
+                finally:
+                    self.user.assert_icommand(['irm', '-f', logical_path])
+
+    def test_tier_out_with_insufficient_permissions(self):
+        perms = [
+            'null',
+            'read_metadata',
+            'read_object',
+            # The levels after this cause replicas to get stuck in intermediate status if replication is attempted.
+            'create_metadata',
+            'modify_metadata',
+            'delete_metadata',
+            'create_object']
+
+        for perm in perms:
+            with self.subTest(perm):
+                self.do_tier_out_for_user_with_insufficient_permissions(perm)
+
+    def test_tier_out_with_sufficient_permissions(self):
+        perms = ['modify_object', 'delete_object', 'own']
+
+        for perm in perms:
+            with self.subTest(perm):
+                self.do_tier_out_for_user_with_sufficient_permissions(perm)
