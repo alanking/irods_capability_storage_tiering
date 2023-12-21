@@ -1657,7 +1657,7 @@ class test_incorrect_custom_violating_queries(unittest.TestCase):
                         ['imeta', 'rm', '-R', resource, query_attribute_name, custom_violating_query])
 
     def test_no_tiering_occurs_when_custom_violating_query_selects_fewer_columns_than_necessary__issue_231(self):
-        # Missing DATA_REPL_NUM in query.
+        # Missing USER_ZONE in query.
         columns = 'DATA_NAME, COLL_NAME, USER_NAME, DATA_REPL_NUM'
         self.do_incorrect_violating_query_test(columns)
 
