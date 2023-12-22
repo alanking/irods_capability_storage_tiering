@@ -495,21 +495,19 @@ namespace irods {
 
             return results;
         }
-        catch(const exception&) {
-            const auto leaf_str = get_leaf_resources_string(_resource_name);
-            metadata_results results;
-            results.push_back(
-                std::make_pair(boost::str(
-                boost::format("SELECT DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM WHERE META_DATA_ATTR_NAME = '%s' AND META_DATA_ATTR_VALUE < '%s' AND META_DATA_ATTR_UNITS <> '%s' AND DATA_RESC_ID IN (%s)")
-                % config_.access_time_attribute
-                % tier_time
-                % config_.migration_scheduled_flag
-                % leaf_str), ""));
-            rodsLog(
-                config_.data_transfer_log_level_value,
-                "use default query for [%s]",
-                _resource_name.c_str());
-            return results;
+        catch (const irods::exception&) {
+            rodsLog(config_.data_transfer_log_level_value, "use default query for [%s]", _resource_name.c_str());
+
+            return metadata_results{std::make_pair(
+                fmt::format(
+                    "select DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM where META_DATA_ATTR_NAME = '{}' "
+                    "and META_DATA_ATTR_VALUE < '{}' and META_DATA_ATTR_UNITS <> '{}' and DATA_RESC_ID IN ({}) and "
+                    "DATA_ACCESS_TYPE >= '1120'",
+                    config_.access_time_attribute,
+                    tier_time,
+                    config_.migration_scheduled_flag,
+                    get_leaf_resources_string(_resource_name)),
+                "")};
         }
     } // get_violating_queries_for_resource
 
