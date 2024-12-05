@@ -392,37 +392,52 @@ class TestStorageTieringPlugin(ResourceBase, unittest.TestCase):
                     finally:
                         alice_session.assert_icommand('irm -f ' + filename)
 
-    def test_single_quote_data_name__127(self):
+    def test_data_name_with_underscore_ampersand_and_apostrophes__issue_127_281(self):
         with storage_tiering_configured():
             IrodsController().restart(test_mode=True)
-            zone_name = IrodsConfig().client_environment['irods_zone_name']
+            zone_name = IrodsConfig().client_environment["irods_zone_name"]
             with session.make_session_for_existing_admin() as admin_session:
                 with session.make_session_for_existing_user('alice', 'apass', lib.get_hostname(), zone_name) as alice_session:
-                    filename = "test_put_file_with_\'quotes\'"
-                    cmd_filename = '\"'+filename+'\"'
-
+                    filename = "test_put_file_with_underscores'apostrophes'&ampersand"
+                    logical_path = '/'.join([alice_session.home_collection, filename])
                     try:
                         lib.create_local_testfile(filename)
-                        alice_session.assert_icommand('iput -R rnd0 ' + cmd_filename)
-                        alice_session.assert_icommand('imeta ls -d ' + cmd_filename, 'STDOUT_SINGLELINE', filename)
-                        alice_session.assert_icommand('ils -L ' + cmd_filename, 'STDOUT_SINGLELINE', filename)
+                        alice_session.assert_icommand(["iput", "-R", "rnd0", logical_path])
+                        alice_session.assert_icommand(["ils", "-L", logical_path], 'STDOUT', "rnd0")
+                        alice_session.assert_icommand(["imeta", "ls", "-d", logical_path], 'STDOUT', "access_time")
                         time.sleep(5)
 
                         # test stage to tier 1
                         invoke_storage_tiering_rule()
-                        delay_assert_icommand(alice_session, 'ils -L ' + cmd_filename, 'STDOUT_SINGLELINE', 'rnd1')
+                        delay_assert_icommand(alice_session, f"ils -L {logical_path}", 'STDOUT', 'rnd1')
+                        alice_session.assert_icommand(["ils", "-L", logical_path], "STDOUT", "rnd1")
 
                         # test stage to tier 2
                         time.sleep(15)
                         invoke_storage_tiering_rule()
-                        delay_assert_icommand(alice_session, 'ils -L ' + cmd_filename, 'STDOUT_SINGLELINE', 'rnd2')
+                        delay_assert_icommand(alice_session, f"ils -L {logical_path}", "STDOUT", "rnd2")
 
                         # test restage to tier 0
-                        alice_session.assert_icommand('iget ' + cmd_filename + ' - ', 'STDOUT_SINGLELINE', 'TESTFILE')
-                        delay_assert_icommand(alice_session, 'ils -L ' + cmd_filename, 'STDOUT_SINGLELINE', 'rnd0')
+                        alice_session.assert_icommand(["iget", logical_path, "-"], 'STDOUT', 'TESTFILE')
+                        delay_assert_icommand(alice_session, f"ils -L {logical_path}", "STDOUT", "rnd0")
 
                     finally:
-                        alice_session.assert_icommand('irm -f ' + cmd_filename)
+                        alice_session.assert_icommand(["irm", "-f", logical_path])
+
+    def test_itouch_data_object_with_select_in_the_name__issue_281(self):
+        with storage_tiering_configured():
+            IrodsController().restart(test_mode=True)
+            zone_name = IrodsConfig().client_environment["irods_zone_name"]
+            with session.make_session_for_existing_admin() as admin_session:
+                with session.make_session_for_existing_user('alice', 'apass', lib.get_hostname(), zone_name) as alice_session:
+                    filename = "select"
+                    logical_path = '/'.join([alice_session.home_collection, filename])
+                    try:
+                        # All we need to do is have storage tiering configured in order to cause this to fail.
+                        alice_session.assert_icommand(["itouch", logical_path])
+
+                    finally:
+                        alice_session.assert_icommand(["irm", "-f", logical_path])
 
     def test_storage_tiering_sets_admin_keyword_when_updating_access_time_as_rodsadmin__222(self):
         with storage_tiering_configured():
