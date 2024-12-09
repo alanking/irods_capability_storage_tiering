@@ -111,7 +111,7 @@ namespace {
             obj_name);
 
         const auto query_str = boost::str(
-                        boost::format("SELECT DATA_CHECKSUM WHERE DATA_NAME = '%s' AND COLL_NAME = '%s' AND RESC_NAME = '%s'") %
+                        boost::format("select DATA_CHECKSUM where DATA_NAME = '%s' and COLL_NAME = '%s' and RESC_NAME = '%s'") %
                         obj_name %
                         coll_name %
                         _resource_name);
@@ -158,7 +158,7 @@ namespace {
         const auto leaf_str = get_leaf_resources_string(
                                    _resource_name);
         const auto query_str = boost::str(
-                        boost::format("SELECT DATA_PATH, DATA_RESC_HIER, DATA_SIZE, DATA_CHECKSUM WHERE DATA_NAME = '%s' AND COLL_NAME = '%s' AND DATA_RESC_ID IN (%s)") %
+                        boost::format("select DATA_PATH, DATA_RESC_HIER, DATA_SIZE, DATA_CHECKSUM where DATA_NAME = '%s' and COLL_NAME = '%s' and DATA_RESC_ID in (%s)") %
                         obj_name %
                         coll_name %
                         leaf_str);

@@ -257,7 +257,7 @@ class TestStorageTieringPlugin(ResourceBase, unittest.TestCase):
             admin_session.assert_icommand('imeta add -R rnd2 irods::storage_tiering::group example_group 2')
             admin_session.assert_icommand('imeta add -R rnd0 irods::storage_tiering::time 5')
             admin_session.assert_icommand('imeta add -R rnd1 irods::storage_tiering::time 15')
-            admin_session.assert_icommand('''imeta set -R rnd1 irods::storage_tiering::query "SELECT DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM where RESC_NAME = 'ufs2' || = 'ufs3' and META_DATA_ATTR_NAME = 'irods::access_time' and META_DATA_ATTR_VALUE < 'TIME_CHECK_STRING'"''')
+            admin_session.assert_icommand('''imeta set -R rnd1 irods::storage_tiering::query "select DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM where RESC_NAME = 'ufs2' || = 'ufs3' and META_DATA_ATTR_NAME = 'irods::access_time' and META_DATA_ATTR_VALUE < 'TIME_CHECK_STRING'"''')
             admin_session.assert_icommand('imeta add -R rnd0 irods::storage_tiering::minimum_delay_time_in_seconds 1')
             admin_session.assert_icommand('imeta add -R rnd0 irods::storage_tiering::maximum_delay_time_in_seconds 2')
             admin_session.assert_icommand('imeta add -R rnd1 irods::storage_tiering::minimum_delay_time_in_seconds 1')
@@ -518,7 +518,7 @@ class TestStorageTieringPluginMultiGroup(ResourceBase, unittest.TestCase):
             admin_session.assert_icommand('imeta add -R rnd2 irods::storage_tiering::group example_group 2')
             admin_session.assert_icommand('imeta add -R rnd0 irods::storage_tiering::time 5')
             admin_session.assert_icommand('imeta add -R rnd1 irods::storage_tiering::time 15')
-            admin_session.assert_icommand('''imeta set -R rnd1 irods::storage_tiering::query "SELECT DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM  where RESC_NAME = 'ufs2' || = 'ufs3' and META_DATA_ATTR_NAME = 'irods::access_time' and META_DATA_ATTR_VALUE < 'TIME_CHECK_STRING'"''')
+            admin_session.assert_icommand('''imeta set -R rnd1 irods::storage_tiering::query "select DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM where RESC_NAME = 'ufs2' || = 'ufs3' and META_DATA_ATTR_NAME = 'irods::access_time' and META_DATA_ATTR_VALUE < 'TIME_CHECK_STRING'"''')
 
             admin_session.assert_icommand('iadmin mkresc ufs0g2 unixfilesystem '+test.settings.HOSTNAME_1 +':/tmp/irods/ufs0g2', 'STDOUT_SINGLELINE', 'unixfilesystem')
             admin_session.assert_icommand('iadmin mkresc ufs1g2 unixfilesystem '+test.settings.HOSTNAME_1 +':/tmp/irods/ufs1g2', 'STDOUT_SINGLELINE', 'unixfilesystem')
@@ -531,7 +531,7 @@ class TestStorageTieringPluginMultiGroup(ResourceBase, unittest.TestCase):
             admin_session.assert_icommand('imeta add -R ufs0g2 irods::storage_tiering::time 5')
             admin_session.assert_icommand('imeta add -R ufs1g2 irods::storage_tiering::time 15')
 
-            admin_session.assert_icommand('''imeta set -R ufs1g2 irods::storage_tiering::query "SELECT DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM where RESC_NAME = 'ufs1g2' and META_DATA_ATTR_NAME = 'irods::access_time' and META_DATA_ATTR_VALUE < 'TIME_CHECK_STRING'"''')
+            admin_session.assert_icommand('''imeta set -R ufs1g2 irods::storage_tiering::query "select DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM where RESC_NAME = 'ufs1g2' and META_DATA_ATTR_NAME = 'irods::access_time' and META_DATA_ATTR_VALUE < 'TIME_CHECK_STRING'"''')
             admin_session.assert_icommand('imeta add -R rnd0 irods::storage_tiering::minimum_delay_time_in_seconds 1')
             admin_session.assert_icommand('imeta add -R rnd0 irods::storage_tiering::maximum_delay_time_in_seconds 2')
             admin_session.assert_icommand('imeta add -R rnd1 irods::storage_tiering::minimum_delay_time_in_seconds 1')
@@ -635,7 +635,7 @@ class TestStorageTieringPluginCustomMetadata(ResourceBase, unittest.TestCase):
             admin_session.assert_icommand('imeta add -R rnd2 irods::custom_storage_tiering::group example_group 2')
             admin_session.assert_icommand('imeta add -R rnd0 irods::custom_storage_tiering::time 5')
             admin_session.assert_icommand('imeta add -R rnd1 irods::custom_storage_tiering::time 15')
-            admin_session.assert_icommand('''imeta set -R rnd1 irods::custom_storage_tiering::query "SELECT DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM where RESC_NAME = 'ufs2' || = 'ufs3' and META_DATA_ATTR_NAME = 'irods::custom_access_time' and META_DATA_ATTR_VALUE < 'TIME_CHECK_STRING'"''')
+            admin_session.assert_icommand('''imeta set -R rnd1 irods::custom_storage_tiering::query "select DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM where RESC_NAME = 'ufs2' || = 'ufs3' and META_DATA_ATTR_NAME = 'irods::custom_access_time' and META_DATA_ATTR_VALUE < 'TIME_CHECK_STRING'"''')
             admin_session.assert_icommand('imeta add -R rnd0 irods::storage_tiering::minimum_delay_time_in_seconds 1')
             admin_session.assert_icommand('imeta add -R rnd0 irods::storage_tiering::maximum_delay_time_in_seconds 2')
             admin_session.assert_icommand('imeta add -R rnd1 irods::storage_tiering::minimum_delay_time_in_seconds 1')
@@ -1287,7 +1287,7 @@ class TestStorageTieringMultipleQueries(ResourceBase, unittest.TestCase):
 
             admin_session.assert_icommand('imeta add -R ufs0 irods::storage_tiering::time 15')
 
-            admin_session.assert_icommand('''imeta add -R ufs0 irods::storage_tiering::query "SELECT DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM where RESC_NAME = 'ufs0' and META_DATA_ATTR_NAME = 'irods::access_time' and META_DATA_ATTR_VALUE < 'TIME_CHECK_STRING'"''')
+            admin_session.assert_icommand('''imeta add -R ufs0 irods::storage_tiering::query "select DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM where RESC_NAME = 'ufs0' and META_DATA_ATTR_NAME = 'irods::access_time' and META_DATA_ATTR_VALUE < 'TIME_CHECK_STRING'"''')
             admin_session.assert_icommand('''imeta add -R ufs0 irods::storage_tiering::query archive_query specific''')
             admin_session.assert_icommand('imeta add -R ufs0 irods::storage_tiering::minimum_delay_time_in_seconds 1')
             admin_session.assert_icommand('imeta add -R ufs0 irods::storage_tiering::maximum_delay_time_in_seconds 2')
@@ -1646,7 +1646,7 @@ class test_incorrect_custom_violating_queries(unittest.TestCase):
                 resource = 'ufs0'
                 other_resource = 'ufs1'
                 query_attribute_name = 'irods::storage_tiering::query'
-                custom_violating_query = '''"SELECT {} where RESC_NAME = '{}' ''' \
+                custom_violating_query = '''"select {} where RESC_NAME = '{}' ''' \
                                          '''and META_DATA_ATTR_NAME = 'irods::access_time' ''' \
                                          '''and META_DATA_ATTR_VALUE < 'TIME_CHECK_STRING'"'''.format(
                                          columns_to_select, resource)

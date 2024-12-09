@@ -79,7 +79,7 @@ namespace irods {
 
         std::string query_str {
             boost::str(
-                boost::format("SELECT META_DATA_ATTR_VALUE WHERE META_DATA_ATTR_NAME = '%s' and DATA_NAME = '%s' AND COLL_NAME = '%s'") %
+                boost::format("select META_DATA_ATTR_VALUE where META_DATA_ATTR_NAME = '%s' and DATA_NAME = '%s' and COLL_NAME = '%s'") %
                     _meta_attr_name %
                     data_name %
                     coll_name) };
@@ -101,7 +101,7 @@ namespace irods {
         const std::string& _resource_name ) {
         std::string query_str {
             boost::str(
-                    boost::format("SELECT META_RESC_ATTR_VALUE WHERE META_RESC_ATTR_NAME = '%s' and RESC_NAME = '%s'") %
+                    boost::format("select META_RESC_ATTR_VALUE where META_RESC_ATTR_NAME = '%s' and RESC_NAME = '%s'") %
                     _meta_attr_name %
                     _resource_name) };
         query<rcComm_t> qobj{_comm, query_str, 1};
@@ -123,7 +123,7 @@ namespace irods {
         metadata_results&   _results ) {
         std::string query_str {
             boost::str(
-                    boost::format("SELECT META_RESC_ATTR_VALUE, META_RESC_ATTR_UNITS WHERE META_RESC_ATTR_NAME = '%s' and RESC_NAME = '%s'") %
+                    boost::format("select META_RESC_ATTR_VALUE, META_RESC_ATTR_UNITS where META_RESC_ATTR_NAME = '%s' and RESC_NAME = '%s'") %
                     _meta_attr_name %
                     _resource_name) };
         query<rcComm_t> qobj{_comm, query_str};
@@ -149,7 +149,7 @@ namespace irods {
         std::string query_str{
             boost::str(
                     boost::format(
-                        "SELECT RESC_ID, META_RESC_ATTR_UNITS WHERE META_RESC_ATTR_NAME = '%s' and META_RESC_ATTR_VALUE = '%s'") %
+                        "select RESC_ID, META_RESC_ATTR_UNITS where META_RESC_ATTR_NAME = '%s' and META_RESC_ATTR_VALUE = '%s'") %
                     config_.group_attribute %
                     _group_name) };
         for(auto row : query<rcComm_t>{_comm, query_str}) {
@@ -259,7 +259,7 @@ namespace irods {
         std::string query_str{
             boost::str(
                     boost::format(
-                        "SELECT RESC_NAME WHERE META_RESC_ATTR_NAME = '%s' and META_RESC_ATTR_VALUE = 'true' and RESC_ID IN (%s)") %
+                        "select RESC_NAME where META_RESC_ATTR_NAME = '%s' and META_RESC_ATTR_VALUE = 'true' and RESC_ID IN (%s)") %
                     config_.minimum_restage_tier %
                     resc_list) };
         query<rcComm_t> qobj{_comm, query_str, 1};
@@ -418,7 +418,7 @@ namespace irods {
         try {
             std::string query_str{
                 boost::str(
-                        boost::format("SELECT META_RESC_ATTR_UNITS, RESC_NAME WHERE META_RESC_ATTR_VALUE = '%s' AND META_RESC_ATTR_NAME = '%s'") %
+                        boost::format("select META_RESC_ATTR_UNITS, RESC_NAME where META_RESC_ATTR_VALUE = '%s' and META_RESC_ATTR_NAME = '%s'") %
                         _group %
                         config_.group_attribute)};
             query<rcComm_t> qobj{_comm, query_str};
@@ -500,7 +500,7 @@ namespace irods {
             metadata_results results;
             results.push_back(
                 std::make_pair(boost::str(
-                boost::format("SELECT DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM WHERE META_DATA_ATTR_NAME = '%s' AND META_DATA_ATTR_VALUE < '%s' AND META_DATA_ATTR_UNITS <> '%s' AND DATA_RESC_ID IN (%s)")
+                boost::format("select DATA_NAME, COLL_NAME, USER_NAME, USER_ZONE, DATA_REPL_NUM where META_DATA_ATTR_NAME = '%s' and META_DATA_ATTR_VALUE < '%s' and META_DATA_ATTR_UNITS <> '%s' and DATA_RESC_ID IN (%s)")
                 % config_.access_time_attribute
                 % tier_time
                 % config_.migration_scheduled_flag
@@ -549,7 +549,7 @@ namespace irods {
         std::string coll_name = p.parent_path().string();
         std::string data_name = p.filename().string();
         std::string qstr{boost::str(boost::format(
-            "SELECT RESC_ID WHERE DATA_NAME = '%s' AND COLL_NAME = '%s' AND DATA_RESC_ID IN (%s)")
+            "select RESC_ID where DATA_NAME = '%s' and COLL_NAME = '%s' and DATA_RESC_ID in (%s)")
             % data_name % coll_name % _partial_list)};
 
         query<rcComm_t> qobj{_comm, qstr};
@@ -794,7 +794,7 @@ namespace irods {
 
         std::string leaf_ids = get_leaf_resources_string(_resource_name);
         std::string qstr{boost::str(
-            boost::format("SELECT DATA_REPL_NUM WHERE DATA_NAME = '%s' AND COLL_NAME = '%s' AND DATA_RESC_ID IN (%s)")
+            boost::format("select DATA_REPL_NUM where DATA_NAME = '%s' and COLL_NAME = '%s' and DATA_RESC_ID IN (%s)")
             % data_name
             % coll_name
             % leaf_ids)};
@@ -820,7 +820,7 @@ namespace irods {
         std::string coll_name = p.parent_path().string();
 
         std::string qstr{boost::str(
-            boost::format("SELECT META_DATA_ATTR_VALUE WHERE DATA_NAME = '%s' AND COLL_NAME = '%s' AND META_DATA_ATTR_NAME = '%s'")
+            boost::format("select META_DATA_ATTR_VALUE where DATA_NAME = '%s' and COLL_NAME = '%s' and META_DATA_ATTR_NAME = '%s'")
             % data_name
             % coll_name
             % _attribute_name)};
@@ -1013,7 +1013,7 @@ namespace irods {
 
         std::string query_str {
             boost::str(
-                boost::format("SELECT META_DATA_ATTR_VALUE WHERE META_DATA_ATTR_NAME = '%s' and META_DATA_ATTR_UNITS = '%s' and DATA_NAME = '%s' AND COLL_NAME = '%s'")
+                boost::format("select META_DATA_ATTR_VALUE where META_DATA_ATTR_NAME = '%s' and META_DATA_ATTR_UNITS = '%s' and DATA_NAME = '%s' and COLL_NAME = '%s'")
                 % config_.access_time_attribute
                 % config_.migration_scheduled_flag
                 % data_name
