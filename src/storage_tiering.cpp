@@ -416,22 +416,23 @@ namespace irods {
 
         resource_index_map groups;
         try {
-            std::string query_str{
-                boost::str(
-                        boost::format("SELECT META_RESC_ATTR_UNITS, RESC_NAME WHERE META_RESC_ATTR_VALUE = '%s' AND META_RESC_ATTR_NAME = '%s'") %
-                        _group %
-                        config_.group_attribute)};
+            const auto query_str = fmt::format("select META_RESC_ATTR_UNITS, RESC_NAME where META_RESC_ATTR_VALUE = '{}' AND META_RESC_ATTR_NAME = '{}'", _group, config_.group_attribute);
+
             query<rcComm_t> qobj{_comm, query_str};
-            for(const auto& g : qobj) {
-                groups[g[0]] = g[1];
+            for(const auto& result : qobj) {
+                groups[result[0]] = result[1];
             }
 
             return groups;
         }
-        catch(const std::exception&) {
+        catch(const irods::exception& e) {
+            irods::log(LOG_NOTICE, fmt::format("{}: irods::exception occurred while building resource map for group [{}]: {}", __func__, _group, e.client_display_what()));
             return groups;
         }
-
+        catch(const std::exception& e) {
+            irods::log(LOG_NOTICE, fmt::format("{}: std::exception occurred while building resource map for group [{}]: {}", __func__, _group, e.what()));
+            return groups;
+        }
     } // get_resource_map_for_group
 
     std::string storage_tiering::get_tier_time_for_resc(
@@ -544,13 +545,13 @@ namespace irods {
     bool storage_tiering::skip_object_in_lower_tier(
         rcComm_t*          _comm,
         const std::string& _object_path,
-        const std::string& _partial_list) {
+        const std::string& _lower_tier_resource_list) {
         boost::filesystem::path p{_object_path};
         std::string coll_name = p.parent_path().string();
         std::string data_name = p.filename().string();
         std::string qstr{boost::str(boost::format(
             "SELECT RESC_ID WHERE DATA_NAME = '%s' AND COLL_NAME = '%s' AND DATA_RESC_ID IN (%s)")
-            % data_name % coll_name % _partial_list)};
+            % data_name % coll_name % _lower_tier_resource_list)};
 
         query<rcComm_t> qobj{_comm, qstr};
         bool skip = qobj.size() > 0;
@@ -559,7 +560,7 @@ namespace irods {
                 config_.data_transfer_log_level_value,
                 "irods::storage_tiering - skipping migration for [%s] in resource list [%s]",
                 _object_path.c_str(),
-                _partial_list.c_str());
+                _lower_tier_resource_list.c_str());
         }
 
         return skip;
@@ -568,9 +569,10 @@ namespace irods {
     void storage_tiering::migrate_violating_data_objects(
         rcComm_t*          _comm,
         const std::string& _group_name,
-        const std::string& _partial_list,
+        const std::string& _lower_tier_resource_list,
         const std::string& _source_resource,
-        const std::string& _destination_resource) {
+        const std::string& _destination_resource)
+    {
         using result_row = irods::query_processor<rcComm_t>::result_row;
 
         constexpr auto number_of_columns_required_from_query = 5;
@@ -593,7 +595,7 @@ namespace irods {
                         _source_resource.c_str(),
                         violating_query_string.c_str(),
                         violating_query_type);
-                    if(_results.size() == 0) {
+                    if (_results.size() == 0) {
                         return;
                     }
 
@@ -613,13 +615,12 @@ namespace irods {
 
                     auto object_path = _results[1]; // coll name
                     const auto& vps  = get_virtual_path_separator();
-                    if( !boost::ends_with(object_path, vps)) {
+                    if (!boost::ends_with(object_path, vps)) {
                         object_path += vps;
                     }
                     object_path += _results[0]; // data name
 
-                    if(std::end(object_is_processed) !=
-                       object_is_processed.find(object_path)) {
+                    if (std::end(object_is_processed) != object_is_processed.find(object_path)) {
                         return;
                     }
 
@@ -628,11 +629,8 @@ namespace irods {
                     auto proxy_conn = irods::proxy_connection();
                     rcComm_t* comm = proxy_conn.make(_results[2], _results[3]);
 
-                    if(preserve_replicas) {
-                        if(skip_object_in_lower_tier(
-                               comm,
-                               object_path,
-                               _partial_list)) {
+                    if (preserve_replicas) {
+                        if (skip_object_in_lower_tier(comm, object_path, _lower_tier_resource_list)) {
                             return;
                         }
                     }
@@ -650,7 +648,6 @@ namespace irods {
                         get_verification_for_resc(comm, _destination_resource),
                         get_preserve_replicas_for_resc(comm, _source_resource),
                         get_data_movement_parameters_for_resource(comm, _source_resource));
-
                 }; // job
 
                 try {
@@ -674,7 +671,7 @@ namespace irods {
                             % violating_query_string.c_str());
                     }
                 }
-                catch(const exception& _e) {
+                catch(const irods::exception& _e) {
                     // if nothing of interest is found, thats not an error
                     if(CAT_NO_ROWS_FOUND == _e.code()) {
                         rodsLog(
@@ -896,9 +893,8 @@ namespace irods {
         }
     } // migrate_object_to_minimum_restage_tier
 
-    std::string storage_tiering::make_partial_list(
-            resource_index_map::iterator _itr,
-            resource_index_map::iterator _end) {
+    auto storage_tiering::make_partial_list(resource_index_map::iterator _itr, resource_index_map::iterator _end) -> std::string
+    {
         ++_itr; // skip source resource
 
         std::string partial_list{};
@@ -910,38 +906,24 @@ namespace irods {
 
     } // make_partial_list
 
-    void storage_tiering::apply_policy_for_tier_group(
-        const std::string& _group) {
-
-        resource_index_map rescs = get_resource_map_for_group(
-                                             comm_,
-                                             _group);
-        if(rescs.empty()) {
-            rodsLog(
-                LOG_ERROR,
-                "%s :: no resources found for group [%s]",
-                __FUNCTION__,
-                _group.c_str());
+    auto storage_tiering::apply_policy_for_tier_group(const std::string& _group) -> void
+    {
+        resource_index_map rescs = get_resource_map_for_group(comm_, _group);
+        if (rescs.empty()) {
+            rodsLog(LOG_ERROR, "%s :: no resources found for group [%s]", __func__, _group.c_str());
             return;
         }
 
         auto resc_itr = rescs.begin();
         for( ; resc_itr != rescs.end(); ++resc_itr) {
-            const auto partial_list{make_partial_list(resc_itr, rescs.end())};
+            const auto lower_tier_resource_list = make_partial_list(resc_itr, rescs.end());
             auto next_itr = resc_itr;
             ++next_itr;
-            if(rescs.end() == next_itr) {
+            if (rescs.end() == next_itr) {
                 break;
             }
-            migrate_violating_data_objects(
-                comm_,
-                _group,
-                partial_list,
-                resc_itr->second,
-                next_itr->second);
-
+            migrate_violating_data_objects(comm_, _group, lower_tier_resource_list, resc_itr->second, next_itr->second);
         } // for resc
-
     } // apply_policy_for_tier_group
 
     void storage_tiering::set_migration_metadata_flag_for_object(
