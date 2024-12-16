@@ -6,6 +6,10 @@ import tempfile
 
 import irods_python_ci_utilities
 
+def add_clang_to_front_of_path():
+    clang_path = '/opt/irods-externals/clang13.0.1-0/bin'
+    os.environ['PATH'] = os.pathsep.join([clang_path, os.environ['PATH']])
+
 def add_cmake_to_front_of_path():
     cmake_path = '/opt/irods-externals/cmake3.21.4-0/bin'
     os.environ['PATH'] = os.pathsep.join([cmake_path, os.environ['PATH']])
@@ -30,6 +34,7 @@ def install_building_dependencies(externals_directory):
             externals.append(glob.glob(os.path.join(os_specific_directory, irods_externals + '*.{0}'.format(package_suffix)))[0])
         irods_python_ci_utilities.install_os_packages_from_files(externals)
     add_cmake_to_front_of_path()
+    add_clang_to_front_of_path()
     install_os_specific_dependencies()
 
 def install_os_specific_dependencies_apt():
