@@ -754,6 +754,14 @@ namespace irods {
          };
 
         execMyRuleInp_t exec_inp{};
+        const auto free_exec_inp_members = irods::at_scope_exit{
+            [&exec_inp] {
+                clearKeyVal(&exec_inp.condInput);
+                clearMsParamArray(exec_inp.inpParamArray, 1);
+                std::free(exec_inp.inpParamArray);
+            }
+        };
+
         rstrcpy(exec_inp.myRule, rule_obj.dump().c_str(), META_STR_LEN);
         msParamArray_t* out_arr{};
         addKeyVal(
@@ -762,6 +770,11 @@ namespace irods {
           , "irods_rule_engine_plugin-cpp_default_policy-instance");
 
         auto err = rcExecMyRule(_comm, &exec_inp, &out_arr);
+
+        // The output parameter array is not used so it must be freed immediately.
+        clearMsParamArray(out_arr, 1);
+        std::free(out_arr);
+        out_arr = nullptr;
 
         if(err < 0) {
             THROW(
