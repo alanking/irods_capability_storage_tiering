@@ -620,11 +620,13 @@ namespace irods {
                     }
                     object_path += _results[0]; // data name
 
+                    // TODO: Is this thread-safe? Might need a lock here...
                     if (std::end(object_is_processed) != object_is_processed.find(object_path)) {
                         return;
                     }
 
                     object_is_processed[object_path] = 1;
+                    // ...and unlock here...
 
                     auto proxy_conn = irods::proxy_connection();
                     rcComm_t* comm = proxy_conn.make(_results[2], _results[3]);
