@@ -42,6 +42,23 @@
 #include <nlohmann/json.hpp>
 
 #include <irods/objDesc.hpp>
+
+// __has_feature is a Clang specific feature.
+// The preprocessor code below exists so that other compilers can be used (e.g. GCC).
+#ifndef __has_feature
+#  define __has_feature(feature) 0
+#endif
+#if __has_feature(address_sanitizer) || defined(__SANITIZE_ADDRESS__)
+// Defines default options for running the HTTP API with Address Sanitizer enabled.
+// This is a convenience function which allows the HTTP API to start without needing the
+// administrator to specify options via environment variables.
+extern "C" const char* __asan_default_options()
+{
+    // See root CMakeLists.txt file for definition.
+    return IRODS_ADDRESS_SANITIZER_DEFAULT_OPTIONS;
+} // __asan_default_options
+#endif
+
 extern l1desc_t L1desc[NUM_L1_DESC];
 
 int _delayExec(
