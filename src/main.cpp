@@ -18,7 +18,6 @@
 #include <irods/apiNumber.h>
 #include "irods/private/storage_tiering/data_verification_utilities.hpp"
 #include <irods/irods_server_api_call.hpp>
-#include "irods/private/storage_tiering/exec_as_user.hpp"
 
 #include <irods/filesystem.hpp>
 #include <irods/irods_at_scope_exit.hpp>
@@ -453,7 +452,7 @@ namespace {
                 parser.first_resc(source_resource);
 
                 auto proxy_conn = irods::proxy_connection();
-                rcComm_t* comm = proxy_conn.make(_rei->rsComm->clientUser.userName, _rei->rsComm->clientUser.rodsZone);
+                rcComm_t* comm = proxy_conn.make();
 
                 irods::storage_tiering st{comm, _rei, plugin_instance_name};
 
@@ -502,7 +501,7 @@ namespace {
                     auto [object_path, resource_name] = opened_objects[l1_idx];
 
                     auto proxy_conn = irods::proxy_connection();
-                    rcComm_t* comm = proxy_conn.make(_rei->rsComm->clientUser.userName, _rei->rsComm->clientUser.rodsZone);
+                    rcComm_t* comm = proxy_conn.make();
 
                     irods::storage_tiering st{comm, _rei, plugin_instance_name};
                     st.migrate_object_to_minimum_restage_tier(
@@ -773,34 +772,28 @@ irods::error exec_rule_expression(
                 auto& pin = plugin_instance_name;
 
                 auto proxy_conn = irods::proxy_connection();
-                rcComm_t* comm = proxy_conn.make( rule_obj["user-name"], rule_obj["user-zone"]);
+                rcComm_t* comm = proxy_conn.make();
 
-                auto status = irods::exec_as_user(comm, user_name, user_zone, [& pin, & rule_obj](auto& comm) -> int{
-                                    return apply_data_movement_policy(
-                                        comm,
-                                        plugin_instance_name,
-                                        rule_obj["object-path"],
-                                        rule_obj["user-name"],
-                                        rule_obj["user-zone"],
-                                        rule_obj["source-replica-number"],
-                                        rule_obj["source-resource"],
-                                        rule_obj["destination-resource"],
-                                        rule_obj["preserve-replicas"],
-                                        rule_obj["verification-type"]);
-                                    });
+                auto status = apply_data_movement_policy(comm,
+                                                         plugin_instance_name,
+                                                         rule_obj["object-path"],
+                                                         rule_obj["user-name"],
+                                                         rule_obj["user-zone"],
+                                                         rule_obj["source-replica-number"],
+                                                         rule_obj["source-resource"],
+                                                         rule_obj["destination-resource"],
+                                                         rule_obj["preserve-replicas"],
+                                                         rule_obj["verification-type"]);
 
                 irods::storage_tiering st{comm, rei, plugin_instance_name};
-                status = irods::exec_as_user(comm, user_name, user_zone, [& st, & rule_obj](auto& comm) -> int{
-                                    return apply_tier_group_metadata_policy(
-                                        st,
-                                        rule_obj["group-name"],
-                                        rule_obj["object-path"],
-                                        rule_obj["user-name"],
-                                        rule_obj["user-zone"],
-                                        rule_obj["source-replica-number"],
-                                        rule_obj["source-resource"],
-                                        rule_obj["destination-resource"]);
-                                    });
+                status = apply_tier_group_metadata_policy(st,
+                                                          rule_obj["group-name"],
+                                                          rule_obj["object-path"],
+                                                          rule_obj["user-name"],
+                                                          rule_obj["user-zone"],
+                                                          rule_obj["source-replica-number"],
+                                                          rule_obj["source-resource"],
+                                                          rule_obj["destination-resource"]);
             }
             catch(const irods::exception& _e) {
                 printErrorStack(&rei->rsComm->rError);
