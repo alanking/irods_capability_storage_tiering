@@ -1785,3 +1785,291 @@ class test_executing_rules_as_rodsuser__issue_293(unittest.TestCase):
     @unittest.skip("TODO(#294): Stub for now.")
     def test_rule_invoked_by_rodsuser_with_delay_via_irule_fails(self):
         pass
+
+
+class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        self.user1 = session.mkuser_and_return_session("rodsuser", "tolstoy", "tpass", lib.get_hostname())
+        self.admin1 = session.mkuser_and_return_session("rodsadmin", "dostoevsky", "dpass", lib.get_hostname())
+        self.group1_name = "sillybillies"
+        self.emptygroup_name = "anothergroup"
+
+        self.tier0 = "ufs0"
+        self.tier1 = "ufs1"
+        self.tier0_time_in_seconds = 5
+
+        self.filename = "test_tiering_out_one_object_with_various_owners"
+        if not os.path.exists(self.filename):
+            lib.create_local_testfile(self.filename)
+
+        self.collection_path = "/".join(["/" + self.user1.zone_name, "public_collection"])
+        self.object_path = "/".join([self.collection_path, self.filename])
+
+        with session.make_session_for_existing_admin() as admin_session:
+            admin_session.assert_icommand(['iqdel', '-a'])
+
+            # Make a place for public group to put stuff.
+            admin_session.assert_icommand(["imkdir", "-p", self.collection_path])
+            admin_session.assert_icommand(["ichmod", "-r", "own", "public", self.collection_path])
+
+            session.mkgroup_and_add_users(self.group1_name, [self.user1.username, self.admin1.username])
+            # Empty group should be empty.
+            session.mkgroup_and_add_users(self.emptygroup_name, [])
+
+            lib.create_ufs_resource(admin_session, self.tier0, test.settings.HOSTNAME_2)
+            admin_session.assert_icommand(
+                ['imeta', 'add', '-R', self.tier0, 'irods::storage_tiering::group', 'example_group', '0'])
+            admin_session.assert_icommand(
+                ['imeta', 'add', '-R', self.tier0, 'irods::storage_tiering::time', str(self.tier0_time_in_seconds)])
+            admin_session.assert_icommand(
+                ['imeta', 'ls', '-R', self.tier0], 'STDOUT', [f'value: {self.tier0_time_in_seconds}', 'value: example_group'])
+
+            lib.create_ufs_resource(admin_session, self.tier1, test.settings.HOSTNAME_3)
+            admin_session.assert_icommand(
+                ['imeta', 'add', '-R', self.tier1, 'irods::storage_tiering::group', 'example_group', '1'])
+            admin_session.assert_icommand(['imeta', 'ls', '-R', self.tier1], 'STDOUT', 'value: example_group')
+
+    @classmethod
+    def tearDownClass(self):
+        if os.path.exists(self.filename):
+            os.unlink(self.filename)
+
+        self.user1.__exit__()
+        self.admin1.__exit__()
+
+        with session.make_session_for_existing_admin() as admin_session:
+            admin_session.assert_icommand(['iadmin', 'rmuser', self.user1.username])
+            admin_session.assert_icommand(['iadmin', 'rmuser', self.admin1.username])
+            admin_session.assert_icommand(['iadmin', 'rmgroup', self.group1_name])
+            admin_session.assert_icommand(['iadmin', 'rmgroup', self.emptygroup_name])
+
+            admin_session.assert_icommand(['iqdel', '-a'])
+
+            admin_session.assert_icommand(['iadmin', 'rmresc', self.tier0])
+            admin_session.assert_icommand(['iadmin', 'rmresc', self.tier1])
+            admin_session.assert_icommand(['iadmin', 'rum'])
+
+    def tearDown(self):
+        # Make sure the test object is cleaned up after each test runs.
+        with session.make_session_for_existing_admin() as admin_session:
+            admin_session.assert_icommand(["ichmod", "-M", "own", admin_session.username, self.object_path])
+            admin_session.assert_icommand(["irm", "-f", self.object_path])
+
+    def test_one_rodsadmin_with_own_succeeds(self):
+        # This is a very basic test to demonstrate that rodsadmins can tier out their own objects.
+        permission = "own"
+        with storage_tiering_configured():
+            IrodsController().restart(test_mode=True)
+
+            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
+
+            # Ensure that the delay queue is empty before attempting to schedule the tiering rule. This is to
+            # prevent false negatives in a later assertion of the emptiness of the delay queue.
+            self.admin1.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+            time.sleep(self.tier0_time_in_seconds)
+            invoke_storage_tiering_rule(self.admin1)
+
+            # Wait until the object migrates to the next tier.
+            delay_assert_icommand(self.admin1, ["ils", "-l", self.object_path], "STDOUT", self.tier1)
+
+            # Ensure that nothing is scheduled in the delay queue. The tiering rule should have completed. If
+            # any failures occurred, it is likely that the delayed rule will be retried so we are making sure
+            # that is not happening here.
+            self.admin1.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+    def test_one_rodsadmin_with_own_and_rule_invoked_by_different_rodsadmin_succeeds(self):
+        # This is a very basic test to demonstrate that rodsadmins can tier out other rodsadmin's objects.
+        permission = "own"
+        with storage_tiering_configured():
+            IrodsController().restart(test_mode=True)
+
+            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
+
+            with session.make_session_for_existing_admin() as admin_session:
+                # Ensure that the delay queue is empty before attempting to schedule the tiering rule. This is to
+                # prevent false negatives in a later assertion of the emptiness of the delay queue.
+                admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+                time.sleep(self.tier0_time_in_seconds)
+                invoke_storage_tiering_rule(admin_session)
+
+            # Wait until the object migrates to the next tier.
+            delay_assert_icommand(self.admin1, ["ils", "-l", self.object_path], "STDOUT", self.tier1)
+
+            # Ensure that nothing is scheduled in the delay queue. The tiering rule should have completed. If
+            # any failures occurred, it is likely that the delayed rule will be retried so we are making sure
+            # that is not happening here.
+            self.admin1.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+    def do_one_rodsuser_with_permissions_succeeds_test(self, permission):
+        # This is a basic test to show that objects tier out regardless of what permissions for rodsusers exist on it.
+        with storage_tiering_configured():
+            IrodsController().restart(test_mode=True)
+
+            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
+
+            # Give permissions exclusively to a rodsuser (removing permissions for original owner).
+            self.admin1.assert_icommand(["ichmod", permission, self.user1.username, self.object_path])
+            self.admin1.assert_icommand(["ichmod", "null", self.admin1.username, self.object_path])
+
+            with session.make_session_for_existing_admin() as admin_session:
+                # Ensure that the delay queue is empty before attempting to schedule the tiering rule. This is to
+                # prevent false negatives in a later assertion of the emptiness of the delay queue.
+                admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+                time.sleep(self.tier0_time_in_seconds)
+                invoke_storage_tiering_rule(admin_session)
+
+            # Wait until the object migrates to the next tier.
+            delay_assert_icommand(self.user1, ["ils", "-l", self.object_path], "STDOUT", self.tier1)
+
+            # Ensure that nothing is scheduled in the delay queue. The tiering rule should have completed. If
+            # any failures occurred, it is likely that the delayed rule will be retried so we are making sure
+            # that is not happening here.
+            self.user1.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+    def test_one_rodsuser_with_read_succeeds__issue_164_189(self):
+        self.do_one_rodsuser_with_permissions_succeeds_test("read_object")
+
+    def test_one_rodsuser_with_write_succeeds(self):
+        self.do_one_rodsuser_with_permissions_succeeds_test("modify_object")
+
+    def test_one_rodsuser_with_own_succeeds(self):
+        self.do_one_rodsuser_with_permissions_succeeds_test("own")
+
+    def do_one_empty_rodsgroup_with_permissions_succeeds_test(self, permission):
+        # This is a basic test to show that an object tiers out if only a memberless rodsgroup has permissions on it.
+        with storage_tiering_configured():
+            IrodsController().restart(test_mode=True)
+
+            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
+
+            # Give permissions exclusively to a group (removing permissions for original owner).
+            self.admin1.assert_icommand(["ichmod", permission, self.emptygroup_name, self.object_path])
+            self.admin1.assert_icommand(["ichmod", "null", self.admin1.username, self.object_path])
+
+            with session.make_session_for_existing_admin() as admin_session:
+                # Ensure that the delay queue is empty before attempting to schedule the tiering rule. This is to
+                # prevent false negatives in a later assertion of the emptiness of the delay queue.
+                admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+                time.sleep(self.tier0_time_in_seconds)
+                invoke_storage_tiering_rule(admin_session)
+
+                # Wait until the object migrates to the next tier.
+                delay_assert_icommand(admin_session, ["ils", "-l", self.object_path], "STDOUT", self.tier1)
+
+                # Ensure that nothing is scheduled in the delay queue. The tiering rule should have completed. If
+                # any failures occurred, it is likely that the delayed rule will be retried so we are making sure
+                # that is not happening here.
+                admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+    def test_one_empty_rodsgroup_with_read_succeeds__issue_164_189_273(self):
+        self.do_one_empty_rodsgroup_with_permissions_succeeds_test("read_object")
+
+    def test_one_empty_rodsgroup_with_write_succeeds__issue_273(self):
+        self.do_one_empty_rodsgroup_with_permissions_succeeds_test("modify_object")
+
+    def test_one_empty_rodsgroup_with_own_succeeds__issue_273(self):
+        self.do_one_empty_rodsgroup_with_permissions_succeeds_test("own")
+
+    def do_one_rodsgroup_with_permissions_succeeds_test(self, permission):
+        # This is a basic test to show that objects tier out even if only a rodsgroup has permissions on them.
+        with storage_tiering_configured():
+            IrodsController().restart(test_mode=True)
+
+            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
+
+            # Give permissions exclusively to a group (removing permissions for original owner).
+            self.admin1.assert_icommand(["ichmod", permission, self.group1_name, self.object_path])
+            self.admin1.assert_icommand(["ichmod", "null", self.admin1.username, self.object_path])
+
+            with session.make_session_for_existing_admin() as admin_session:
+                # Ensure that the delay queue is empty before attempting to schedule the tiering rule. This is to
+                # prevent false negatives in a later assertion of the emptiness of the delay queue.
+                admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+                time.sleep(self.tier0_time_in_seconds)
+                invoke_storage_tiering_rule(admin_session)
+
+                # Wait until the object migrates to the next tier.
+                delay_assert_icommand(admin_session, ["ils", "-l", self.object_path], "STDOUT", self.tier1)
+
+                # Ensure that nothing is scheduled in the delay queue. The tiering rule should have completed. If
+                # any failures occurred, it is likely that the delayed rule will be retried so we are making sure
+                # that is not happening here.
+                admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+    def test_one_rodsgroup_with_read_succeeds__issue_164_189_273(self):
+        self.do_one_rodsgroup_with_permissions_succeeds_test("read_object")
+
+    def test_one_rodsgroup_with_write_succeeds__issue_273(self):
+        self.do_one_rodsgroup_with_permissions_succeeds_test("modify_object")
+
+    def test_one_rodsgroup_with_own_succeeds__issue_273(self):
+        self.do_one_rodsgroup_with_permissions_succeeds_test("own")
+
+    def test_two_rodsgroups_with_own_succeeds__issue_273(self):
+        # This is a basic test to show that objects tier out even if multiple rodsgroups have permissions on them.
+        permission = "own"
+        with storage_tiering_configured():
+            IrodsController().restart(test_mode=True)
+
+            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
+
+            # Give permissions exclusively to two groups (removing permissions for original owner).
+            self.admin1.assert_icommand(["ichmod", permission, self.group1_name, self.object_path])
+            self.admin1.assert_icommand(["ichmod", permission, self.emptygroup_name, self.object_path])
+            self.admin1.assert_icommand(["ichmod", "null", self.admin1.username, self.object_path])
+
+            with session.make_session_for_existing_admin() as admin_session:
+                # Ensure that the delay queue is empty before attempting to schedule the tiering rule. This is to
+                # prevent false negatives in a later assertion of the emptiness of the delay queue.
+                admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+                time.sleep(self.tier0_time_in_seconds)
+                invoke_storage_tiering_rule(admin_session)
+
+                # Wait until the object migrates to the next tier.
+                delay_assert_icommand(admin_session, ["ils", "-l", self.object_path], "STDOUT", self.tier1)
+
+                # Ensure that nothing is scheduled in the delay queue. The tiering rule should have completed. If
+                # any failures occurred, it is likely that the delayed rule will be retried so we are making sure
+                # that is not happening here.
+                admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+    def test_two_rodsusers_with_own_succeeds__issue_273(self):
+        # This is a basic test to show that objects tier out even if multiple rodsusers have permissions on them.
+        permission = "own"
+        with storage_tiering_configured():
+            IrodsController().restart(test_mode=True)
+
+            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
+
+            # Give permissions to a rodsuser and keep permissions for the original owner so there are two owners.
+            self.admin1.assert_icommand(["ichmod", permission, self.user1.username, self.object_path])
+
+            with session.make_session_for_existing_admin() as admin_session:
+                # Ensure that the delay queue is empty before attempting to schedule the tiering rule. This is to
+                # prevent false negatives in a later assertion of the emptiness of the delay queue.
+                admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+                time.sleep(self.tier0_time_in_seconds)
+                invoke_storage_tiering_rule(admin_session)
+
+                # Wait until the object migrates to the next tier.
+                delay_assert_icommand(admin_session, ["ils", "-l", self.object_path], "STDOUT", self.tier1)
+
+                # Ensure that nothing is scheduled in the delay queue. The tiering rule should have completed. If
+                # any failures occurred, it is likely that the delayed rule will be retried so we are making sure
+                # that is not happening here.
+                admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
