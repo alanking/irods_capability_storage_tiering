@@ -33,6 +33,7 @@
 #include <nlohmann/json.hpp>
 
 #include <charconv>
+#include <mutex>
 #include <random>
 #include <system_error>
 #include <tuple>
@@ -577,6 +578,7 @@ namespace irods {
         irods::thread_pool thread_pool{config_.number_of_scheduling_threads};
         try {
             std::map<std::string, uint8_t> object_is_processed;
+            std::mutex object_is_processed_mutex;
             const bool preserve_replicas = get_preserve_replicas_for_resc(_comm, _source_resource);
             const auto query_limit       = get_object_limit_for_resource(_comm, _source_resource);
             const auto query_list        = get_violating_queries_for_resource(_comm, _source_resource);
@@ -617,12 +619,15 @@ namespace irods {
                     }
                     object_path += _results[0]; // data name
 
-                    if(std::end(object_is_processed) !=
-                       object_is_processed.find(object_path)) {
-                        return;
-                    }
+                    {
+                        const std::lock_guard object_is_processed_lock{object_is_processed_mutex};
 
-                    object_is_processed[object_path] = 1;
+                        if (std::end(object_is_processed) != object_is_processed.find(object_path)) {
+                            return;
+                        }
+
+                        object_is_processed[object_path] = 1;
+                    }
 
                     auto proxy_conn = irods::proxy_connection();
                     rcComm_t* comm = proxy_conn.make();
