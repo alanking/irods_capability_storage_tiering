@@ -239,6 +239,16 @@ def get_tracked_replica(session, logical_path, group_attribute_name=None):
 
     return session.run_icommand(['iquest', '%s', tracked_replica_query])[0].strip()
 
+def get_access_time(session, logical_path):
+    coll_name = os.path.dirname(logical_path)
+    data_name = os.path.basename(logical_path)
+
+    query = "select META_DATA_ATTR_VALUE where " \
+            f"COLL_NAME = '{coll_name}' and DATA_NAME = '{data_name}' and " \
+            "META_DATA_ATTR_NAME = 'irods::access_time'"
+
+    return admin_session.assert_icommand(['iquest', '%s', query], 'STDOUT')[1].strip()
+
 
 class TestStorageTieringPlugin(ResourceBase, unittest.TestCase):
     def setUp(self):
@@ -2073,3 +2083,92 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
                 # any failures occurred, it is likely that the delayed rule will be retried so we are making sure
                 # that is not happening here.
                 admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+
+
+class test_accessing_read_only_object_updates_access_time__issue_175_203(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        self.user1 = session.mkuser_and_return_session("rodsuser", "tolstoy", "tpass", lib.get_hostname())
+
+        self.filename = "test_tiering_out_one_object_with_various_owners"
+        if not os.path.exists(self.filename):
+            lib.create_local_testfile(self.filename)
+
+        self.collection_path = "/".join(["/" + self.user1.zone_name, "public_collection"])
+        self.object_path = "/".join([self.collection_path, self.filename])
+
+        with session.make_session_for_existing_admin() as admin_session:
+            # Make a place for public group to put stuff.
+            admin_session.assert_icommand(["imkdir", "-p", self.collection_path])
+            admin_session.assert_icommand(["ichmod", "-r", "own", "public", self.collection_path])
+
+            with storage_tiering_configured():
+                IrodsController().restart(test_mode=True)
+                # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+                # For this test, we don't actually care about tiering or restaging objects. We just want to test
+                # updating the access_time metadata. To that end, it doesn't matter what resource the object's replica
+                # goes into. This is why no tier groups are being configured in this test.
+                admin_session.assert_icommand(["iput", self.filename, self.object_path])
+
+            # Give permissions exclusively to a rodsuser (removing permissions for original owner).
+            admin_session.assert_icommand(["ichmod", permission, self.user1.username, self.object_path])
+            admin_session.assert_icommand(["ichmod", "null", admin_session.username, self.object_path])
+
+        if os.path.exists(self.filename):
+            os.unlink(self.filename)
+
+    @classmethod
+    def tearDownClass(self):
+        self.user1.__exit__()
+
+        with session.make_session_for_existing_admin() as admin_session:
+            admin_session.assert_icommand(['iadmin', 'rmuser', self.user1.username])
+            admin_session.assert_icommand(['iadmin', 'rum'])
+
+    def tearDown(self):
+        # Make sure the test object is cleaned up after each test runs.
+        with session.make_session_for_existing_admin() as admin_session:
+            admin_session.assert_icommand(["ichmod", "-M", "own", admin_session.username, self.object_path])
+            admin_session.assert_icommand(["irm", "-f", self.object_path])
+
+    @unittest.skip("TODO(#200): Need to implement replica_close PEP")
+    def test_open_read_close_updates_access_time(self):
+        # This is a basic test to show that access_time metadata is updated when open/read/close APIs access the data.
+        with storage_tiering_configured():
+            IrodsController().restart(test_mode=True)
+
+            # Capture the original access time so we have something against which to compare.
+            access_time = get_access_time(self.user1, self.object_path)
+            self.assertNotIn("CAT_NO_ROWS_FOUND", access_time)
+
+            # sleeping guarantees the access time will be different following the access.
+            time.sleep(2)
+
+            # Access the data...
+            self.user1.assert_icommand(["iget", self.object_path, "-"], "STDOUT")
+
+            # Ensure the access_time was updated as a result of the access.
+            new_access_time = get_access_time(self.user1, self.object_path)
+            self.assertNotIn("CAT_NO_ROWS_FOUND", new_access_time)
+            self.assertGreater(new_access_time, access_time)
+
+    @unittest.skip("TODO(#200): Need to implement get PEP")
+    def test_get_updates_access_time(self):
+        # This is a basic test to show that access_time metadata is updated when iget accesses the data.
+        with storage_tiering_configured():
+            IrodsController().restart(test_mode=True)
+
+            # Capture the original access time so we have something against which to compare.
+            access_time = get_access_time(self.user1, self.object_path)
+            self.assertNotIn("CAT_NO_ROWS_FOUND", access_time)
+
+            # sleeping guarantees the access time will be different following the access.
+            time.sleep(2)
+
+            # Access the data...
+            self.user1.assert_icommand(["iget", self.object_path, "-"], "STDOUT")
+
+            # Ensure the access_time was updated as a result of the access.
+            new_access_time = get_access_time(self.user1, self.object_path)
+            self.assertNotIn("CAT_NO_ROWS_FOUND", new_access_time)
+            self.assertGreater(new_access_time, access_time)
