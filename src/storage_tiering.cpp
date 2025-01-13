@@ -22,7 +22,6 @@
 
 #include "irods/private/storage_tiering/data_verification_utilities.hpp"
 
-
 #include <boost/any.hpp>
 #include <boost/regex.hpp>
 #include <boost/exception/all.hpp>
@@ -988,7 +987,9 @@ namespace irods {
         }
 
         if (const auto ec = rcModAVUMetadata(_comm, &set_op); ec < 0) {
-            THROW(ec, fmt::format("failed to set migration scheduled flag for [{}]", _object_path));
+            const auto msg = fmt::format("{}: failed to set migration scheduled flag for [{}]", __func__, _object_path);
+            rodsLog(LOG_ERROR, msg.c_str());
+            THROW(ec, msg);
         }
     } // set_migration_metadata_flag_for_object
 
@@ -1014,7 +1015,10 @@ namespace irods {
         }
 
         if (const auto ec = rcModAVUMetadata(_comm, &set_op); ec < 0) {
-            THROW(ec, fmt::format("failed to unset migration scheduled flag for [{}]", _object_path));
+            const auto msg =
+                fmt::format("{}: failed to unset migration scheduled flag for [{}]", __func__, _object_path);
+            rodsLog(LOG_ERROR, msg.c_str());
+            THROW(ec, msg);
         }
     } // unset_migration_metadata_flag_for_object
 
@@ -1072,12 +1076,11 @@ namespace irods {
             }
 
             auto status = rcModAVUMetadata(comm_, &set_op);
-            if(status < 0) {
-                THROW(
-                    status,
-                    boost::format("failed to set tier group [%s] metadata for [%s]")
-                    % _group_name
-                    % _object_path);
+            if (status < 0) {
+                const auto msg = fmt::format(
+                    "{}: failed to set tier group [{}] metadata for [{}]", __func__, _group_name, _object_path);
+                rodsLog(LOG_ERROR, msg.c_str());
+                THROW(status, msg);
             }
         }
         catch(const exception& _e) {
