@@ -16,6 +16,7 @@ namespace irods {
             rodsEnv env{};
             _getRodsEnv(env);
 
+            // TODO(#296): Handle any errors which occur in _rcConnect or clientLogin.
             conn = _rcConnect(env.rodsHost,
                               env.rodsPort,
                               env.rodsUserName,
@@ -38,6 +39,7 @@ namespace irods {
             rodsEnv env{};
             _getRodsEnv(env);
 
+            // TODO(#296): Handle any errors which occur in _rcConnect or clientLogin.
             conn = _rcConnect(env.rodsHost,
                               env.rodsPort,
                               env.rodsUserName,

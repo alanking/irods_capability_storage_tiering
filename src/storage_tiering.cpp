@@ -984,7 +984,7 @@ namespace irods {
            const_cast<char*>(config_.migration_scheduled_flag.c_str())};
 
         if (_comm->clientUser.authInfo.authFlag >= LOCAL_PRIV_USER_AUTH) {
-            addKeyVal(&set_op.condInput, ADMIN_KW, "true");
+            addKeyVal(&set_op.condInput, ADMIN_KW, "");
         }
 
         if (const auto ec = rcModAVUMetadata(_comm, &set_op); ec < 0) {
@@ -1010,7 +1010,7 @@ namespace irods {
            nullptr};
 
         if (_comm->clientUser.authInfo.authFlag >= LOCAL_PRIV_USER_AUTH) {
-            addKeyVal(&set_op.condInput, ADMIN_KW, "true");
+            addKeyVal(&set_op.condInput, ADMIN_KW, "");
         }
 
         if (const auto ec = rcModAVUMetadata(_comm, &set_op); ec < 0) {
@@ -1068,7 +1068,7 @@ namespace irods {
                 const_cast<char*>(destination_replica_number.c_str())};
 
             if (comm_->clientUser.authInfo.authFlag >= LOCAL_PRIV_USER_AUTH) {
-                addKeyVal(&set_op.condInput, ADMIN_KW, "true");
+                addKeyVal(&set_op.condInput, ADMIN_KW, "");
             }
 
             auto status = rcModAVUMetadata(comm_, &set_op);

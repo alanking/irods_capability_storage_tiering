@@ -127,7 +127,7 @@ namespace {
         addKeyVal(&data_obj_inp.condInput, DEST_RESC_NAME_KW, _destination_resource.c_str());
 
         if(_comm->clientUser.authInfo.authFlag >= LOCAL_PRIV_USER_AUTH) {
-            addKeyVal(&data_obj_inp.condInput, ADMIN_KW, "true" );
+            addKeyVal(&data_obj_inp.condInput, ADMIN_KW, "");
         }
 
         transferStat_t* trans_stat{};
@@ -166,10 +166,7 @@ namespace {
             COPIES_KW,
             "1");
         if(_comm->clientUser.authInfo.authFlag >= LOCAL_PRIV_USER_AUTH) {
-            addKeyVal(
-                &obj_inp.condInput,
-                ADMIN_KW,
-                "true" );
+            addKeyVal(&obj_inp.condInput, ADMIN_KW, "");
         }
 
         const auto trim_err = rcDataObjTrim(_comm, &obj_inp);
