@@ -1819,6 +1819,7 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
             # Empty group should be empty.
             session.mkgroup_and_add_users(self.emptygroup_name, [])
 
+            # Using HOSTNAME_2 here so that topology testing takes effect should we ever employ it in plugin testing.
             lib.create_ufs_resource(admin_session, self.tier0, test.settings.HOSTNAME_2)
             admin_session.assert_icommand(
                 ['imeta', 'add', '-R', self.tier0, 'irods::storage_tiering::group', 'example_group', '0'])
@@ -1827,6 +1828,7 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
             admin_session.assert_icommand(
                 ['imeta', 'ls', '-R', self.tier0], 'STDOUT', [f'value: {self.tier0_time_in_seconds}', 'value: example_group'])
 
+            # Using HOSTNAME_3 here so that topology testing takes effect should we ever employ it in plugin testing.
             lib.create_ufs_resource(admin_session, self.tier1, test.settings.HOSTNAME_3)
             admin_session.assert_icommand(
                 ['imeta', 'add', '-R', self.tier1, 'irods::storage_tiering::group', 'example_group', '1'])
@@ -1841,30 +1843,30 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
         self.admin1.__exit__()
 
         with session.make_session_for_existing_admin() as admin_session:
-            admin_session.assert_icommand(['iadmin', 'rmuser', self.user1.username])
-            admin_session.assert_icommand(['iadmin', 'rmuser', self.admin1.username])
-            admin_session.assert_icommand(['iadmin', 'rmgroup', self.group1_name])
-            admin_session.assert_icommand(['iadmin', 'rmgroup', self.emptygroup_name])
+            admin_session.run_icommand(['iadmin', 'rmuser', self.user1.username])
+            admin_session.run_icommand(['iadmin', 'rmuser', self.admin1.username])
+            admin_session.run_icommand(['iadmin', 'rmgroup', self.group1_name])
+            admin_session.run_icommand(['iadmin', 'rmgroup', self.emptygroup_name])
 
-            admin_session.assert_icommand(['iqdel', '-a'])
+            admin_session.run_icommand(['iqdel', '-a'])
 
-            admin_session.assert_icommand(['iadmin', 'rmresc', self.tier0])
-            admin_session.assert_icommand(['iadmin', 'rmresc', self.tier1])
-            admin_session.assert_icommand(['iadmin', 'rum'])
+            admin_session.run_icommand(['iadmin', 'rmresc', self.tier0])
+            admin_session.run_icommand(['iadmin', 'rmresc', self.tier1])
+            admin_session.run_icommand(['iadmin', 'rum'])
 
     def tearDown(self):
         # Make sure the test object is cleaned up after each test runs.
         with session.make_session_for_existing_admin() as admin_session:
-            admin_session.assert_icommand(["ichmod", "-M", "own", admin_session.username, self.object_path])
-            admin_session.assert_icommand(["irm", "-f", self.object_path])
+            admin_session.run_icommand(["ichmod", "-M", "own", admin_session.username, self.object_path])
+            admin_session.run_icommand(["irm", "-f", self.object_path])
 
-    def test_one_rodsadmin_with_own_succeeds(self):
+    def test_one_rodsadmin_with_own_permission_succeeds(self):
         # This is a very basic test to demonstrate that rodsadmins can tier out their own objects.
         permission = "own"
         with storage_tiering_configured():
             IrodsController().restart(test_mode=True)
 
-            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            # TODO(#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
             self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
 
             # Ensure that the delay queue is empty before attempting to schedule the tiering rule. This is to
@@ -1882,13 +1884,13 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
             # that is not happening here.
             self.admin1.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
 
-    def test_one_rodsadmin_with_own_and_rule_invoked_by_different_rodsadmin_succeeds(self):
+    def test_one_rodsadmin_with_own_permission_and_rule_invoked_by_different_rodsadmin_succeeds(self):
         # This is a very basic test to demonstrate that rodsadmins can tier out other rodsadmin's objects.
         permission = "own"
         with storage_tiering_configured():
             IrodsController().restart(test_mode=True)
 
-            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            # TODO(#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
             self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
 
             with session.make_session_for_existing_admin() as admin_session:
@@ -1912,7 +1914,7 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
         with storage_tiering_configured():
             IrodsController().restart(test_mode=True)
 
-            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            # TODO(#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
             self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
 
             # Give permissions exclusively to a rodsuser (removing permissions for original owner).
@@ -1933,15 +1935,15 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
             # Ensure that nothing is scheduled in the delay queue. The tiering rule should have completed. If
             # any failures occurred, it is likely that the delayed rule will be retried so we are making sure
             # that is not happening here.
-            self.user1.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
+            self.admin1.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
 
-    def test_one_rodsuser_with_read_succeeds__issue_164_189(self):
+    def test_one_rodsuser_with_read_permission_succeeds__issue_164_189(self):
         self.do_one_rodsuser_with_permissions_succeeds_test("read_object")
 
-    def test_one_rodsuser_with_write_succeeds(self):
+    def test_one_rodsuser_with_write_permission_succeeds(self):
         self.do_one_rodsuser_with_permissions_succeeds_test("modify_object")
 
-    def test_one_rodsuser_with_own_succeeds(self):
+    def test_one_rodsuser_with_own_permission_succeeds(self):
         self.do_one_rodsuser_with_permissions_succeeds_test("own")
 
     def do_one_empty_rodsgroup_with_permissions_succeeds_test(self, permission):
@@ -1949,7 +1951,7 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
         with storage_tiering_configured():
             IrodsController().restart(test_mode=True)
 
-            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            # TODO(#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
             self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
 
             # Give permissions exclusively to a group (removing permissions for original owner).
@@ -1972,13 +1974,13 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
                 # that is not happening here.
                 admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
 
-    def test_one_empty_rodsgroup_with_read_succeeds__issue_164_189_273(self):
+    def test_one_empty_rodsgroup_with_read_permission_succeeds__issue_164_189_273(self):
         self.do_one_empty_rodsgroup_with_permissions_succeeds_test("read_object")
 
-    def test_one_empty_rodsgroup_with_write_succeeds__issue_273(self):
+    def test_one_empty_rodsgroup_with_write_permission_succeeds__issue_273(self):
         self.do_one_empty_rodsgroup_with_permissions_succeeds_test("modify_object")
 
-    def test_one_empty_rodsgroup_with_own_succeeds__issue_273(self):
+    def test_one_empty_rodsgroup_with_own_permission_succeeds__issue_273(self):
         self.do_one_empty_rodsgroup_with_permissions_succeeds_test("own")
 
     def do_one_rodsgroup_with_permissions_succeeds_test(self, permission):
@@ -1986,7 +1988,7 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
         with storage_tiering_configured():
             IrodsController().restart(test_mode=True)
 
-            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            # TODO(#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
             self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
 
             # Give permissions exclusively to a group (removing permissions for original owner).
@@ -2009,22 +2011,22 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
                 # that is not happening here.
                 admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
 
-    def test_one_rodsgroup_with_read_succeeds__issue_164_189_273(self):
+    def test_one_rodsgroup_with_read_permission_succeeds__issue_164_189_273(self):
         self.do_one_rodsgroup_with_permissions_succeeds_test("read_object")
 
-    def test_one_rodsgroup_with_write_succeeds__issue_273(self):
+    def test_one_rodsgroup_with_write_permission_succeeds__issue_273(self):
         self.do_one_rodsgroup_with_permissions_succeeds_test("modify_object")
 
-    def test_one_rodsgroup_with_own_succeeds__issue_273(self):
+    def test_one_rodsgroup_with_own_permission_succeeds__issue_273(self):
         self.do_one_rodsgroup_with_permissions_succeeds_test("own")
 
-    def test_two_rodsgroups_with_own_succeeds__issue_273(self):
+    def test_two_rodsgroups_with_own_permission_succeeds__issue_273(self):
         # This is a basic test to show that objects tier out even if multiple rodsgroups have permissions on them.
         permission = "own"
         with storage_tiering_configured():
             IrodsController().restart(test_mode=True)
 
-            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            # TODO(#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
             self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
 
             # Give permissions exclusively to two groups (removing permissions for original owner).
@@ -2048,13 +2050,13 @@ class test_tiering_out_one_object_with_various_owners(unittest.TestCase):
                 # that is not happening here.
                 admin_session.assert_icommand(["iqstat", "-a"], "STDOUT", "No delayed rules pending")
 
-    def test_two_rodsusers_with_own_succeeds__issue_273(self):
+    def test_two_rodsusers_with_own_permission_succeeds__issue_273(self):
         # This is a basic test to show that objects tier out even if multiple rodsusers have permissions on them.
         permission = "own"
         with storage_tiering_configured():
             IrodsController().restart(test_mode=True)
 
-            # TODO{#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
+            # TODO(#200): Replace with itouch or istream. Have to use put API due to missing PEP support.
             self.admin1.assert_icommand(["iput", "-R", self.tier0, self.filename, self.object_path])
 
             # Give permissions to a rodsuser and keep permissions for the original owner so there are two owners.
