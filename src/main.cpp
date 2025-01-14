@@ -653,7 +653,7 @@ irods::error exec_rule_text(
 
     if (!irods::is_privileged_client(*rei->rsComm)) {
         const auto msg = fmt::format("{}: Only rodsadmins are allowed to execute storage tiering rules.", __func__);
-        constexpr auto err = SYS_USER_NO_PERMISSION;
+        constexpr auto err = CAT_INSUFFICIENT_PRIVILEGE_LEVEL;
         addRErrorMsg(&rei->rsComm->rError, err, msg.c_str());
         return ERROR(err, msg);
     }
