@@ -620,6 +620,9 @@ namespace irods {
                     object_path += _results[0]; // data name
 
                     {
+                        // A copy of this function is passed to an irods::query_processor for each returned result and
+                        // is executed concurrently. So, we need a lock here to protect against concurrent accesses to
+                        // the object_is_processed map.
                         const std::lock_guard object_is_processed_lock{object_is_processed_mutex};
 
                         if (std::end(object_is_processed) != object_is_processed.find(object_path)) {
