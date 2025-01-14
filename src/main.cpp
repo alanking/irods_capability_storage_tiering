@@ -771,6 +771,7 @@ irods::error exec_rule_expression(
                 auto proxy_conn = irods::proxy_connection();
                 rcComm_t* comm = proxy_conn.make();
 
+                // TODO(#297): Use get or get_ref for these parameters.
                 auto status = apply_data_movement_policy(comm,
                                                          plugin_instance_name,
                                                          rule_obj["object-path"],
@@ -783,6 +784,7 @@ irods::error exec_rule_expression(
                                                          rule_obj["verification-type"]);
 
                 irods::storage_tiering st{comm, rei, plugin_instance_name};
+                // TODO(#297): Use get or get_ref for these parameters.
                 status = apply_tier_group_metadata_policy(st,
                                                           rule_obj["group-name"],
                                                           rule_obj["object-path"],
