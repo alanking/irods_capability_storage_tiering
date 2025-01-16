@@ -48,6 +48,7 @@ int main(int argc, char** argv)
         po::notify(vm);
 
         const auto print_usage = [&od] {
+            std::cout << "NOTE: This program is only intended for testing. Do not use in production.\n";
             std::cout << "Usage: irods_test_read_object [OPTION] ... [DATA_OBJECT_PATH]\n";
             std::cout << od << "\n";
         };
