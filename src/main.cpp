@@ -11,6 +11,7 @@
 #include <irods/openCollection.h>
 #include <irods/readCollection.h>
 #include <irods/closeCollection.h>
+#include <irods/irods_logger.hpp>
 #include <irods/irods_virtual_path.hpp>
 #include <irods/dataObjRepl.h>
 #include <irods/dataObjTrim.h>
@@ -53,6 +54,8 @@ int _delayExec(
     ruleExecInfo_t *rei );
 
 namespace {
+    using logger = irods::experimental::log::rule_engine;
+
     std::unique_ptr<irods::storage_tiering_configuration> config;
     std::map<int, std::tuple<std::string, std::string>> opened_objects;
     std::string plugin_instance_name{};
@@ -201,7 +204,7 @@ namespace {
         auto status = rcModAVUMetadata(_comm, &avuOp);
         if(status < 0) {
             const auto msg = fmt::format("{}: failed to set access time for [{}]", __func__, _logical_path);
-            rodsLog(LOG_ERROR, msg.c_str());
+            logger::error(msg);
             THROW(status, msg);
         }
     } // update_access_time_for_data_object

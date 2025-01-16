@@ -19,6 +19,7 @@
 #include <irods/rsOpenCollection.hpp>
 #include <irods/rsReadCollection.hpp>
 #include <irods/rsCloseCollection.hpp>
+#include <irods/irods_logger.hpp>
 
 #include "irods/private/storage_tiering/data_verification_utilities.hpp"
 
@@ -48,6 +49,8 @@ int _delayExec(
 
 
 namespace irods {
+    using logger = irods::experimental::log::rule_engine;
+
     const std::string storage_tiering::policy::storage_tiering{"irods_policy_storage_tiering"};
     const std::string storage_tiering::policy::data_movement{"irods_policy_data_movement"};
     const std::string storage_tiering::policy::access_time{"irods_policy_apply_access_time"};
@@ -992,7 +995,7 @@ namespace irods {
 
         if (const auto ec = rcModAVUMetadata(_comm, &set_op); ec < 0) {
             const auto msg = fmt::format("{}: failed to set migration scheduled flag for [{}]", __func__, _object_path);
-            rodsLog(LOG_ERROR, msg.c_str());
+            logger::error(msg);
             THROW(ec, msg);
         }
     } // set_migration_metadata_flag_for_object
@@ -1021,7 +1024,7 @@ namespace irods {
         if (const auto ec = rcModAVUMetadata(_comm, &set_op); ec < 0) {
             const auto msg =
                 fmt::format("{}: failed to unset migration scheduled flag for [{}]", __func__, _object_path);
-            rodsLog(LOG_ERROR, msg.c_str());
+            logger::error(msg);
             THROW(ec, msg);
         }
     } // unset_migration_metadata_flag_for_object
@@ -1083,7 +1086,7 @@ namespace irods {
             if (status < 0) {
                 const auto msg = fmt::format(
                     "{}: failed to set tier group [{}] metadata for [{}]", __func__, _group_name, _object_path);
-                rodsLog(LOG_ERROR, msg.c_str());
+                logger::error(msg);
                 THROW(status, msg);
             }
         }
