@@ -68,7 +68,7 @@ def main(build_directory, output_root_directory, irods_packages_root_directory, 
     cmake_options = [f"-DCMAKE_BUILD_TYPE={build_type}"]
     if enable_asan:
         cmake_options.append("-DIRODS_ENABLE_ADDRESS_SANITIZER=YES")
-    cmake_options.append("-DIRODS_TEST_EXECUTABLES_BUILD={}".format("YES" if build_test_executables else "NO")
+    cmake_options.append("-DIRODS_TEST_EXECUTABLES_BUILD={}".format("YES" if build_test_executables else "NO"))
     cmake_command = ['cmake', os.path.dirname(os.path.realpath(__file__))] + cmake_options
     irods_python_ci_utilities.subprocess_get_output(cmake_command, check_rc=True, cwd=build_directory)
     irods_python_ci_utilities.subprocess_get_output(['make', '-j', str(multiprocessing.cpu_count()), 'package'], check_rc=True, cwd=build_directory)
