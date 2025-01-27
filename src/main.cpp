@@ -579,14 +579,14 @@ irods::error rule_exists(
     const std::string& _rn,
     bool&              _ret) {
     const std::set<std::string> rules{"pep_api_data_obj_close_post",
+                                      "pep_api_data_obj_create_post",
                                       "pep_api_data_obj_get_post",
                                       "pep_api_data_obj_open_post",
                                       "pep_api_data_obj_put_post",
                                       "pep_api_data_obj_repl_post",
                                       "pep_api_phy_path_reg_post",
                                       "pep_api_replica_close_post",
-                                      "pep_api_replica_open_post",
-                                      "pep_api_data_obj_create_post"};
+                                      "pep_api_replica_open_post"};
     _ret = rules.find(_rn) != rules.end();
 
     return SUCCESS();
