@@ -785,18 +785,24 @@ class TestStorageTieringPluginMinimumRestage(unittest.TestCase):
             filename = "test_open_read_close_triggers_restage__issue_303"
             try:
                 lib.create_local_testfile(filename)
-                self.user1.assert_icommand(["iput", "-R", "ufs0", filename, logical_path])
+                self.user1.assert_icommand(["iput", "-R", self.tier0, filename, logical_path])
 
                 # Tier out the object...
-                self.user1.assert_icommand(["ils", "-L", logical_path], "STDOUT", self.tier0)
+                self.assertTrue(lib.replica_exists_on_resource(self.user1, logical_path, self.tier0))
                 time.sleep(5)
                 invoke_storage_tiering_rule()
-                delay_assert_icommand(self.user1, f"ils -L {logical_path}", 'STDOUT', self.tier1)
+                # Wait for the object to be trimmed before checking destination to avoid timing issues.
+                lib.delayAssert(
+                    lambda: lib.replica_exists_on_resource(self.user1, logical_path, self.tier0) == False)
+                self.assertTrue(lib.replica_exists_on_resource(self.user1, logical_path, self.tier1))
 
                 # And then again...
                 time.sleep(15)
                 invoke_storage_tiering_rule()
-                delay_assert_icommand(self.user1, f"ils -L {logical_path}", 'STDOUT', self.tier2)
+                # Wait for the object to be trimmed before checking destination to avoid timing issues.
+                lib.delayAssert(
+                    lambda: lib.replica_exists_on_resource(self.user1, logical_path, self.tier1) == False)
+                self.assertTrue(lib.replica_exists_on_resource(self.user1, logical_path, self.tier2))
 
                 # Now see if the object is restaged appropriately on access.
                 access_command(*access_command_args, **access_command_kwargs)
@@ -806,6 +812,8 @@ class TestStorageTieringPluginMinimumRestage(unittest.TestCase):
                 self.assertTrue(lib.replica_exists_on_resource(self.user1, logical_path, expected_destination_resource))
 
             finally:
+                # Run ils to show the state of the world for debugging purposes.
+                self.user1.assert_icommand(["ils", "-L", logical_path], "STDOUT")
                 if os.path.exists(filename):
                     os.unlink(filename)
                 self.user1.assert_icommand(["irm", "-f", logical_path])
@@ -829,7 +837,8 @@ class TestStorageTieringPluginMinimumRestage(unittest.TestCase):
             logical_path,
             self.tier1,
             self.user1.assert_icommand,
-            ["istream", "read", logical_path],
+            # Target tier2 because that is where the data object tiers out in the test implementation.
+            ["istream", "-R", self.tier2, "write", logical_path],
             "STDOUT",
             input="restage this data")
 
