@@ -2,6 +2,7 @@ set(
 	OPERATIONS
 	read
 	create
+	multi1247_parallel_transfer_write
 )
 
 foreach(operation IN LISTS OPERATIONS)
@@ -12,6 +13,8 @@ foreach(operation IN LISTS OPERATIONS)
 	)
 	target_link_libraries(
 		${target_name}
+		PUBLIC
+		nlohmann_json::nlohmann_json
 		PRIVATE
 		irods_client
 		irods_common
